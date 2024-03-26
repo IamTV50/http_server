@@ -1,0 +1,10 @@
+# c++ 
+*/.idea/
+*/cmake-build-*/
+
+# ignores files in www folder
+/www/*
+
+# web files that should NOT be ignored 
+!/www/index_template.html
+!/www/404_template.html
