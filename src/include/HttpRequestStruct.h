@@ -5,13 +5,13 @@
 #include <map>
 
 struct HttpRequest {
-    std::string reqType = ""; // GET, POST, ...
+    std::string reqMethod = ""; // GET, POST, ...
     std::string reqUrl = ""; // e.g. /home
     std::map<std::string, std::string> headers;  // e.g {"Content-Type" : "text/plain"} and others
     std::string body = ""; // empty by default
 
     void empty(){
-        reqType = "";
+        reqMethod = "";
         reqUrl = "";
         body = "";
         headers.clear();

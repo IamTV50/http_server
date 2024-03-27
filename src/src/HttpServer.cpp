@@ -73,6 +73,9 @@ void HttpServer::run() {
         if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
             keepAlive = true;
         }
+        else{
+            keepAlive = false;
+        }
 
         std::string httpResponse = "HTTP/1.1 200 OK\n";
         httpResponse += "Content-Length: 0\n";
