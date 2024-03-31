@@ -10,14 +10,15 @@ private:
     std::string host;
     unsigned int port;
     sockaddr_in serverAddress;
+    SOCKET listenSocket = INVALID_SOCKET;
 
     void setServerAddress();
+    void initializeListenSocket();
 
 public:
     HttpServer();
     HttpServer(std::string host_, int port_);
     void run();
-    void stop();
 };
 
 #endif //SRC_HTTPSERVER_H

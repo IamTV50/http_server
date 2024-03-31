@@ -23,11 +23,10 @@ void HttpServer::setServerAddress() {
     this->serverAddress.sin_port = htons(port);
 }
 
-void HttpServer::run() {
+void HttpServer::initializeListenSocket() {
     int result = 0;
+    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    //create socket for listening
-    SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(listenSocket == INVALID_SOCKET) {
         throw ErrorMessageException("socket function failed with error: " + std::to_string(WSAGetLastError()));
     }
@@ -37,6 +36,12 @@ void HttpServer::run() {
     if(result == SOCKET_ERROR){
         throw ErrorMessageException("bind function failed with error: " + std::to_string(WSAGetLastError()));
     }
+}
+
+void HttpServer::run() {
+    int result = 0;
+
+    initializeListenSocket();
 
     //listen for incoming connection requests on created socket
     if(listen(listenSocket, SOMAXCONN) == SOCKET_ERROR){
@@ -76,6 +81,8 @@ void HttpServer::run() {
         else{
             keepAlive = false;
         }
+
+        //todo - if Connection: close then send response AND close connection with the client
 
         std::string httpResponse = "HTTP/1.1 200 OK\n";
         httpResponse += "Content-Length: 0\n";

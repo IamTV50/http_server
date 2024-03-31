@@ -1,9 +1,6 @@
 #include <iostream>
-#include "./include/HttpServer.h"
 #include <string>
-
-using std::cout;
-using std::endl;
+#include "./include/HttpServer.h"
 
 int main() {
     HttpServer server("127.0.0.1", 9999);
