@@ -38,6 +38,15 @@ void HttpServer::initializeListenSocket() {
     }
 }
 
+void HttpServer::sendResponse(SOCKET clientSocket, const std::string& response) {
+    int result = 0;
+
+    result = send(clientSocket, response.c_str(), response.length(), 0);
+    if(result == SOCKET_ERROR){
+        throw ErrorMessageException("send function failed with error: " + std::to_string(WSAGetLastError()));
+    }
+}
+
 void HttpServer::run() {
     int result = 0;
 
@@ -88,10 +97,6 @@ void HttpServer::run() {
         httpResponse += "Content-Length: 0\n";
         httpResponse += "\n";
 
-        result = send(clientSocket, httpResponse.c_str(), httpResponse.length(), 0);
-        if(result == SOCKET_ERROR){
-            keepAlive = false;
-            throw ErrorMessageException("send function failed with error: " + std::to_string(WSAGetLastError()));
-        }
+        sendResponse(clientSocket, httpResponse);
     }while(keepAlive);
 }
