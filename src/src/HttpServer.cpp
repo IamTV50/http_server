@@ -23,19 +23,21 @@ void HttpServer::setServerAddress() {
     this->serverAddress.sin_port = htons(port);
 }
 
-void HttpServer::initializeListenSocket() {
+SOCKET HttpServer::initializeListenSocket() {
     int result = 0;
-    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    SOCKET tmpListenSoc = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    if(listenSocket == INVALID_SOCKET) {
+    if(tmpListenSoc == INVALID_SOCKET) {
         throw ErrorMessageException("socket function failed with error: " + std::to_string(WSAGetLastError()));
     }
 
-    //bind listenSocket to serverAddress
-    result = bind(listenSocket, (SOCKADDR *)  &serverAddress, sizeof(serverAddress));
+    //bind tmpListenSoc to serverAddress
+    result = bind(tmpListenSoc, (SOCKADDR *)  &serverAddress, sizeof(serverAddress));
     if(result == SOCKET_ERROR){
         throw ErrorMessageException("bind function failed with error: " + std::to_string(WSAGetLastError()));
     }
+
+    return tmpListenSoc;
 }
 
 void HttpServer::sendResponse(SOCKET clientSocket, const std::string& response) {
@@ -50,7 +52,7 @@ void HttpServer::sendResponse(SOCKET clientSocket, const std::string& response) 
 void HttpServer::run() {
     int result = 0;
 
-    initializeListenSocket();
+    listenSocket = initializeListenSocket();
 
     //listen for incoming connection requests on created socket
     if(listen(listenSocket, SOMAXCONN) == SOCKET_ERROR){
@@ -82,21 +84,31 @@ void HttpServer::run() {
         std::string str(recvBuff);
         request = parser.parseRequest(&str);
 
+        std::string httpResponse = "";
         auto connectionHeaderIt = request.headers.find("Connection");
 
         if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
             keepAlive = true;
+
+            std::string tmpResponseMsg = "hello from server !!!!";
+
+            httpResponse = "HTTP/1.1 200 OK\n";
+            httpResponse += "Content-Length: " + std::to_string(tmpResponseMsg.length()) + "\n";
+            httpResponse += "\n";
+            httpResponse += tmpResponseMsg;
         }
         else{
             keepAlive = false;
+
+            httpResponse = "HTTP/1.1 200 OK\n";
+            httpResponse += "Content-Length: 0\n";
+            httpResponse += "\n";
         }
-
-        //todo - if Connection: close then send response AND close connection with the client
-
-        std::string httpResponse = "HTTP/1.1 200 OK\n";
-        httpResponse += "Content-Length: 0\n";
-        httpResponse += "\n";
 
         sendResponse(clientSocket, httpResponse);
     }while(keepAlive);
+
+    closesocket(clientSocket);
+    closesocket(listenSocket);
+    WSACleanup();
 }

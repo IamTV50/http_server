@@ -13,7 +13,7 @@ private:
     SOCKET listenSocket = INVALID_SOCKET;
 
     void setServerAddress();
-    void initializeListenSocket();
+    SOCKET initializeListenSocket();
     void sendResponse(SOCKET clientSocket, const std::string& response);
 
 public:
