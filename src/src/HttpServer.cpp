@@ -40,6 +40,18 @@ SOCKET HttpServer::initializeListenSocket() {
     return tmpListenSoc;
 }
 
+SOCKET HttpServer::acceptClientSocket(SOCKET listenSoc) {
+    std::cout<<"Waiting for client to connect..."<<std::endl;
+
+    SOCKET tmpClientSoc = accept(listenSoc, nullptr, nullptr);
+    if(tmpClientSoc == INVALID_SOCKET){
+        throw ErrorMessageException("accept function failed with error: " + std::to_string(WSAGetLastError()));
+    }
+
+    std::cout<<"client connected..."<<std::endl;
+    return tmpClientSoc;
+}
+
 void HttpServer::sendResponse(SOCKET clientSocket, const std::string& response) {
     int result = 0;
 
@@ -61,16 +73,8 @@ void HttpServer::run() {
     std::cout<<"listening on listenSocket..."<<std::endl;
 
     //create new socket for use of receiving and sending
-    SOCKET clientSocket;
-    std::cout<<"Waiting for client to connect..."<<std::endl;
+    SOCKET clientSocket = acceptClientSocket(listenSocket);
 
-    //accepts the connection
-    clientSocket = accept(listenSocket, nullptr, nullptr);
-    if (clientSocket == INVALID_SOCKET) {
-        throw ErrorMessageException("accept function failed with error: " + std::to_string(WSAGetLastError()));
-    }
-
-    std::cout<<"client connected..."<<std::endl;
     char recvBuff[1024] = {0};
     bool keepAlive = false;
     Parser parser;

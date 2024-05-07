@@ -14,6 +14,7 @@ private:
 
     void setServerAddress();
     SOCKET initializeListenSocket();
+    SOCKET acceptClientSocket(SOCKET listenSoc);
     void sendResponse(SOCKET clientSocket, const std::string& response);
 
 public:
