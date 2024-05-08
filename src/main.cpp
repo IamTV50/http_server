@@ -12,7 +12,5 @@ int main() {
         err.what();
     }
 
-    //todo - if url is "/command/stopserver" run server.stop();
-
     return 0;
 }

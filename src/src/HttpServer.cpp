@@ -2,6 +2,7 @@
 #include "../include/HttpServer.h"
 #include "../include/ErrorMessageException.h"
 #include "../include/Parser.h"
+#include "../include/PageReader.h"
 
 HttpServer::HttpServer() {
     this->host = "127.0.0.1";
@@ -80,13 +81,14 @@ void HttpServer::run() {
     Parser parser;
     HttpRequest request;
 
+    PageReader reader;
     do {
         request.empty();
 
         recv(clientSocket, recvBuff, sizeof(recvBuff), 0);
 
-        std::string str(recvBuff);
-        request = parser.parseRequest(&str);
+        std::string buffStr(recvBuff);
+        request = parser.parseRequest(&buffStr);
 
         std::string httpResponse = "";
         auto connectionHeaderIt = request.headers.find("Connection");
@@ -94,18 +96,32 @@ void HttpServer::run() {
         if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
             keepAlive = true;
 
-            std::string tmpResponseMsg = "hello from server !!!!";
+            std::string htmlPageStr = reader.readPage(request.reqUrl);
 
-            httpResponse = "HTTP/1.1 200 OK\n";
-            httpResponse += "Content-Length: " + std::to_string(tmpResponseMsg.length()) + "\n";
-            httpResponse += "\n";
-            httpResponse += tmpResponseMsg;
+            if(htmlPageStr == "500"){
+                std::string serverErr = "500 Internal Server Error";
+
+                httpResponse = "HTTP/1.1 500 Internal Server Error\n";
+                httpResponse += "Content-Length: " + std::to_string(serverErr.length()) + "\n";
+                httpResponse += "Connection: Keep-Alive\n";
+                httpResponse += "Content-Type: text/html\n";
+                httpResponse += "\n";
+                httpResponse += serverErr;
+            }
+            else{
+                httpResponse = "HTTP/1.1 200 OK\n";
+                httpResponse += "Content-Length: " + std::to_string(htmlPageStr.length()) + "\n";
+                httpResponse += "Connection: Keep-Alive\n";
+                httpResponse += "Content-Type: text/html\n";
+                httpResponse += "\n";
+                httpResponse += htmlPageStr;
+            }
         }
         else{
             keepAlive = false;
 
             httpResponse = "HTTP/1.1 200 OK\n";
-            httpResponse += "Content-Length: 0\n";
+            httpResponse += "Connection: Close\n";
             httpResponse += "\n";
         }
 

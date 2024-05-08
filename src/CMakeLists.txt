@@ -10,6 +10,8 @@ add_executable(src main.cpp
         src/HttpServer.cpp
         include/HttpServer.h
         include/ErrorMessageException.h
+        include/PageReader.h
+        src/PageReader.cpp
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} ws2_32)
