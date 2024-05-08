@@ -3,7 +3,7 @@
 #include "./include/HttpServer.h"
 
 int main() {
-    HttpServer server("127.0.0.1", 9999);
+    HttpServer server("192.168.1.14", 9999); //use local ipv4 (DON'T USE 127.0.0.1)
 
     try{
         server.run();
