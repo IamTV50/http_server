@@ -1,14 +1,13 @@
 #include <string>
+#include <vector>
+#include <thread>
 #include "../include/HttpServer.h"
 #include "../include/ErrorMessageException.h"
 #include "../include/Parser.h"
 #include "../include/PageReader.h"
 
-HttpServer::HttpServer() {
-    this->host = "127.0.0.1";
-    this->port = 8080;
-
-    setServerAddress();
+HttpServer::~HttpServer() {
+    WSACleanup();
 }
 
 HttpServer::HttpServer(std::string host_, int port_): host(host_), port(port_) {
@@ -32,6 +31,13 @@ SOCKET HttpServer::initializeListenSocket() {
         throw ErrorMessageException("socket function failed with error: " + std::to_string(WSAGetLastError()));
     }
 
+    // Set SO_REUSEADDR option
+    int opt = 1;
+    if (setsockopt(tmpListenSoc, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0) {
+        closesocket(tmpListenSoc);
+        throw ErrorMessageException("setsockopt failed with error: " + std::to_string(WSAGetLastError()));
+    }
+
     //bind tmpListenSoc to serverAddress
     result = bind(tmpListenSoc, (SOCKADDR *)  &serverAddress, sizeof(serverAddress));
     if(result == SOCKET_ERROR){
@@ -42,14 +48,11 @@ SOCKET HttpServer::initializeListenSocket() {
 }
 
 SOCKET HttpServer::acceptClientSocket(SOCKET listenSoc) {
-    std::cout<<"Waiting for client to connect..."<<std::endl;
-
     SOCKET tmpClientSoc = accept(listenSoc, nullptr, nullptr);
     if(tmpClientSoc == INVALID_SOCKET){
         throw ErrorMessageException("accept function failed with error: " + std::to_string(WSAGetLastError()));
     }
 
-    std::cout<<"client connected..."<<std::endl;
     return tmpClientSoc;
 }
 
@@ -62,73 +65,120 @@ void HttpServer::sendResponse(SOCKET clientSocket, const std::string& response) 
     }
 }
 
-void HttpServer::run() {
-    int result = 0;
-
-    listenSocket = initializeListenSocket();
+void HttpServer::listenForConnection() {
+    SOCKET listenSocket = initializeListenSocket();
 
     //listen for incoming connection requests on created socket
-    if(listen(listenSocket, SOMAXCONN) == SOCKET_ERROR){
+    if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
         throw ErrorMessageException("listen function failed with error: " + std::to_string(WSAGetLastError()));
     }
-    std::cout<<"listening on listenSocket..."<<std::endl;
 
-    //create new socket for use of receiving and sending
-    SOCKET clientSocket = acceptClientSocket(listenSocket);
-
-    char recvBuff[1024] = {0};
-    bool keepAlive = false;
+    // Accept incoming connections and add them to the queue
     Parser parser;
     HttpRequest request;
+    char recvBuff[1024] = {0};
 
+    SOCKET clientSocket = acceptClientSocket(listenSocket);
+    recv(clientSocket, recvBuff, sizeof(recvBuff), 0);
+
+    std::string buffStr(recvBuff);
+    request = parser.parseRequest(&buffStr);
+
+    request.clientSocket = clientSocket;
+    request.listenSocket = listenSocket;
+
+    {
+        std::lock_guard<std::mutex> lock(requestsMutex);
+        requests.push(request);
+    } //auto unlock mutex
+}
+
+void HttpServer::continuouslyListen() {
+    std::vector<std::thread> listenerThreads;
+
+    //create initial number of listening threads
+    for(int i = 0; i < listenThreadsNum; i++){
+        listenerThreads.emplace_back(std::thread(&HttpServer::listenForConnection, this));
+    }
+
+    std::mutex listenThreadsMutex;
+    while(true){
+        for(auto it = listenerThreads.begin(); it != listenerThreads.end(); ){
+            if(it->joinable()){
+                std::lock_guard<std::mutex> lock(listenThreadsMutex);
+                it->join();
+                it = listenerThreads.erase(it);
+            }
+            else{ it++; }
+        }
+
+        while(listenerThreads.size() < this->listenThreadsNum){
+            std::lock_guard<std::mutex> lock(listenThreadsMutex);
+            listenerThreads.emplace_back(std::thread(&HttpServer::listenForConnection, this));
+        }
+    }
+}
+
+void HttpServer::handleRequest(HttpRequest request) {
     PageReader reader;
-    do {
-        request.empty();
+    std::string httpResponse = "";
+    auto connectionHeaderIt = request.headers.find("Connection");
 
-        recv(clientSocket, recvBuff, sizeof(recvBuff), 0);
+    if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
+        std::string htmlPageStr = reader.readPage(request.reqUrl);
 
-        std::string buffStr(recvBuff);
-        request = parser.parseRequest(&buffStr);
+        if(htmlPageStr == "500"){
+            std::string serverErr = "500 Internal Server Error";
 
-        std::string httpResponse = "";
-        auto connectionHeaderIt = request.headers.find("Connection");
-
-        if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
-            keepAlive = true;
-
-            std::string htmlPageStr = reader.readPage(request.reqUrl);
-
-            if(htmlPageStr == "500"){
-                std::string serverErr = "500 Internal Server Error";
-
-                httpResponse = "HTTP/1.1 500 Internal Server Error\n";
-                httpResponse += "Content-Length: " + std::to_string(serverErr.length()) + "\n";
-                httpResponse += "Connection: Keep-Alive\n";
-                httpResponse += "Content-Type: text/html\n";
-                httpResponse += "\n";
-                httpResponse += serverErr;
-            }
-            else{
-                httpResponse = "HTTP/1.1 200 OK\n";
-                httpResponse += "Content-Length: " + std::to_string(htmlPageStr.length()) + "\n";
-                httpResponse += "Connection: Keep-Alive\n";
-                httpResponse += "Content-Type: text/html\n";
-                httpResponse += "\n";
-                httpResponse += htmlPageStr;
-            }
+            httpResponse = "HTTP/1.1 500 Internal Server Error\n";
+            httpResponse += "Content-Length: " + std::to_string(serverErr.length()) + "\n";
+            httpResponse += "Connection: Keep-Alive\n";
+            httpResponse += "Content-Type: text/html\n";
+            httpResponse += "\n";
+            httpResponse += serverErr;
         }
         else{
-            keepAlive = false;
-
             httpResponse = "HTTP/1.1 200 OK\n";
-            httpResponse += "Connection: Close\n";
+            httpResponse += "Content-Length: " + std::to_string(htmlPageStr.length()) + "\n";
+            httpResponse += "Connection: Keep-Alive\n";
+            httpResponse += "Content-Type: text/html\n";
             httpResponse += "\n";
+            httpResponse += htmlPageStr;
+        }
+    }
+    else{
+        httpResponse = "HTTP/1.1 200 OK\n";
+        httpResponse += "Connection: Close\n";
+        httpResponse += "\n";
+    }
+
+    sendResponse(request.clientSocket, httpResponse);
+    request.empty();
+}
+
+void HttpServer::run() {
+    //continuously listen for incoming connections
+    std::thread listening(&HttpServer::continuouslyListen, this);
+    listening.detach();
+
+    std::cout<<"server running on: http://"<<this->host<<":"<<this->port<<std::endl;
+
+    std::vector<std::thread> clientHandlingThreads;
+    while(true){
+        //if(!requests.empty() && clientHandlingThreads.size() < clientHandleThreadsNum){
+        while(!requests.empty() && clientHandlingThreads.size() < clientHandleThreadsNum){
+            std::lock_guard<std::mutex> lock(requestsMutex);
+            clientHandlingThreads.emplace_back(std::thread(&HttpServer::handleRequest, this, requests.front()));
+            requests.pop();
         }
 
-        sendResponse(clientSocket, httpResponse);
-    }while(keepAlive);
+        for(auto it = clientHandlingThreads.begin(); it != clientHandlingThreads.end(); ) {
+            if (it->joinable()) {
+                it->join();
+                it = clientHandlingThreads.erase(it);
+            } else { it++; }
+        }
 
-    closesocket(clientSocket);
-    closesocket(listenSocket);
-    WSACleanup();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
