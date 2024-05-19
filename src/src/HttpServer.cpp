@@ -119,6 +119,38 @@ void HttpServer::continuouslyListen() {
     }
 }
 
+std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::string body) {
+    std::string httpResponse = "";
+
+    if(!keepAlive){
+        httpResponse = "HTTP/1.1 200 OK\n";
+        httpResponse += "Connection: Close\n";
+        httpResponse += "\n";
+
+        return httpResponse;
+    }
+
+    switch(statusCode){
+        case 200:
+            httpResponse = "HTTP/1.1 200 OK\n";
+            break;
+        case 404:
+            httpResponse = "HTTP/1.1 404 Page Not Found\n";
+            break;
+        default:
+            httpResponse = "HTTP/1.1 500 Internal Server Error\n";
+            break;
+    }
+
+    httpResponse += "Content-Length: " + std::to_string(body.length()) + "\n";
+    httpResponse += "Connection: Keep-Alive\n";
+    httpResponse += "Content-Type: text/html\n";
+    httpResponse += "\n";
+    httpResponse += body;
+
+    return httpResponse;
+}
+
 void HttpServer::handleRequest(HttpRequest request) {
     PageReader reader;
     std::string httpResponse = "";
@@ -130,26 +162,18 @@ void HttpServer::handleRequest(HttpRequest request) {
         if(htmlPageStr == "500"){
             std::string serverErr = "500 Internal Server Error";
 
-            httpResponse = "HTTP/1.1 500 Internal Server Error\n";
-            httpResponse += "Content-Length: " + std::to_string(serverErr.length()) + "\n";
-            httpResponse += "Connection: Keep-Alive\n";
-            httpResponse += "Content-Type: text/html\n";
-            httpResponse += "\n";
-            httpResponse += serverErr;
+            httpResponse = formatResponse(true, 500, serverErr);
+        }
+        else if(htmlPageStr == "404"){
+            htmlPageStr = reader.read404page();
+            httpResponse = formatResponse(true, 404, htmlPageStr);
         }
         else{
-            httpResponse = "HTTP/1.1 200 OK\n";
-            httpResponse += "Content-Length: " + std::to_string(htmlPageStr.length()) + "\n";
-            httpResponse += "Connection: Keep-Alive\n";
-            httpResponse += "Content-Type: text/html\n";
-            httpResponse += "\n";
-            httpResponse += htmlPageStr;
+            httpResponse = formatResponse(true, 200, htmlPageStr);
         }
     }
     else{
-        httpResponse = "HTTP/1.1 200 OK\n";
-        httpResponse += "Connection: Close\n";
-        httpResponse += "\n";
+        httpResponse = formatResponse(false, 200, "");
     }
 
     sendResponse(request.clientSocket, httpResponse);
@@ -165,7 +189,6 @@ void HttpServer::run() {
 
     std::vector<std::thread> clientHandlingThreads;
     while(true){
-        //if(!requests.empty() && clientHandlingThreads.size() < clientHandleThreadsNum){
         while(!requests.empty() && clientHandlingThreads.size() < clientHandleThreadsNum){
             std::lock_guard<std::mutex> lock(requestsMutex);
             clientHandlingThreads.emplace_back(std::thread(&HttpServer::handleRequest, this, requests.front()));

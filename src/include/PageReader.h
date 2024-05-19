@@ -4,10 +4,8 @@
 #include <string>
 
 class PageReader{
-private:
-    std::string read404page();
-
 public:
+    std::string read404page();
     PageReader() = default;
     std::string readPage(std::string pagePath);
 };

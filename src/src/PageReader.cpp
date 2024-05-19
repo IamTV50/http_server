@@ -39,5 +39,5 @@ std::string PageReader::readPage(std::string pagePath){
         return pageStr;
     }
 
-    return read404page();
+    return "404";
 }
