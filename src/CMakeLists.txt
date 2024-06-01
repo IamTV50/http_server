@@ -12,6 +12,8 @@ add_executable(src main.cpp
         include/ErrorMessageException.h
         include/PageReader.h
         src/PageReader.cpp
+        include/ImageReader.h
+        src/ImageReader.cpp
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} ws2_32)

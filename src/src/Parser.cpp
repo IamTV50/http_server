@@ -15,7 +15,12 @@ HttpRequest Parser::parseRequest(const std::string *requestStr) {
     std::getline(requestStrStream, tmpReqLine, '\n');
 
     std::stringstream methodAndUrlStream(tmpReqLine);
-    methodAndUrlStream >> paredData.reqMethod >> paredData.reqUrl;
+    std::string tmpMethod, tmpUrl;
+    methodAndUrlStream >> tmpMethod >> tmpUrl;
+
+    paredData.reqMethod = tmpMethod;
+    paredData.reqUrl = tmpUrl;
+    paredData.imageExtension = paredData.checkForExenesion(tmpUrl);
 
     //get headers
     while(std::getline(requestStrStream, tmpReqLine, '\n')){

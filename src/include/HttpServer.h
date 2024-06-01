@@ -24,7 +24,7 @@ private:
     void sendResponse(SOCKET clientSocket, const std::string& response);
     void listenForConnection();
     void continuouslyListen();
-    std::string formatResponse(bool keepAlive, int statusCode, std::string body);
+    std::string formatResponse(bool keepAlive, int statusCode, std::string contentType, std::string body);
     void handleRequest(HttpRequest request);
 
 public:

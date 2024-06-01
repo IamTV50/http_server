@@ -5,6 +5,7 @@
 #include "../include/ErrorMessageException.h"
 #include "../include/Parser.h"
 #include "../include/PageReader.h"
+#include "../include/ImageReader.h"
 
 HttpServer::~HttpServer() {
     WSACleanup();
@@ -119,7 +120,7 @@ void HttpServer::continuouslyListen() {
     }
 }
 
-std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::string body) {
+std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::string contentType, std::string body) {
     std::string httpResponse = "";
 
     switch(statusCode){
@@ -136,7 +137,7 @@ std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::stri
 
     httpResponse += "Content-Length: " + std::to_string(body.length()) + "\r\n";
     httpResponse += (keepAlive) ? "Connection: Keep-Alive\r\n" : "Connection: Close\r\n";
-    httpResponse += "Content-Type: text/html\r\n";
+    httpResponse += "Content-Type: " + contentType + "\r\n";
     httpResponse += "\r\n";
     httpResponse += body;
 
@@ -144,24 +145,43 @@ std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::stri
 }
 
 void HttpServer::handleRequest(HttpRequest request) {
-    PageReader reader;
+    PageReader pageReader;
+    ImageReader imgReader;
     std::string httpResponse = "";
     auto connectionHeaderIt = request.headers.find("Connection");
     bool keepConnectionAlive = (connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive");
+    std::string body = "";
+    std::string contentType = "";
 
-    std::string htmlPageStr = reader.readPage(request.reqUrl);
+    if(request.imageExtension != ""){
+        body = imgReader.readImage(request.reqUrl);
 
-    if(htmlPageStr == "500"){
-        std::string serverErr = "500 Internal Server Error";
-
-        httpResponse = formatResponse(keepConnectionAlive, 500, serverErr);
-    }
-    else if(htmlPageStr == "404"){
-        htmlPageStr = reader.read404page();
-        httpResponse = formatResponse(keepConnectionAlive, 404, htmlPageStr);
+        if(request.imageExtension == "jpg"){
+            contentType = "image/jpeg";
+        }
+        else if(request.imageExtension == "png"){
+            contentType = "image/png";
+        }
+        else{
+            contentType = "application/octet-stream"; // generic binary data
+        }
     }
     else{
-        httpResponse = formatResponse(keepConnectionAlive, 200, htmlPageStr);
+        body = pageReader.readPage(request.reqUrl);
+        contentType = "text/html";
+    }
+
+    if(body == "500"){
+        std::string serverErr = "500 Internal Server Error";
+
+        httpResponse = formatResponse(keepConnectionAlive, 500, contentType, serverErr);
+    }
+    else if(body == "404"){
+        body = pageReader.read404page();
+        httpResponse = formatResponse(keepConnectionAlive, 404, contentType, body);
+    }
+    else{
+        httpResponse = formatResponse(keepConnectionAlive, 200, contentType, body);
     }
 
     sendResponse(request.clientSocket, httpResponse);
