@@ -122,30 +122,22 @@ void HttpServer::continuouslyListen() {
 std::string HttpServer::formatResponse(bool keepAlive, int statusCode, std::string body) {
     std::string httpResponse = "";
 
-    if(!keepAlive){
-        httpResponse = "HTTP/1.1 200 OK\n";
-        httpResponse += "Connection: Close\n";
-        httpResponse += "\n";
-
-        return httpResponse;
-    }
-
     switch(statusCode){
         case 200:
-            httpResponse = "HTTP/1.1 200 OK\n";
+            httpResponse = "HTTP/1.1 200 OK\r\n";
             break;
         case 404:
-            httpResponse = "HTTP/1.1 404 Page Not Found\n";
+            httpResponse = "HTTP/1.1 404 Page Not Found\r\n";
             break;
         default:
-            httpResponse = "HTTP/1.1 500 Internal Server Error\n";
+            httpResponse = "HTTP/1.1 500 Internal Server Error\r\n";
             break;
     }
 
-    httpResponse += "Content-Length: " + std::to_string(body.length()) + "\n";
-    httpResponse += "Connection: Keep-Alive\n";
-    httpResponse += "Content-Type: text/html\n";
-    httpResponse += "\n";
+    httpResponse += "Content-Length: " + std::to_string(body.length()) + "\r\n";
+    httpResponse += (keepAlive) ? "Connection: Keep-Alive\r\n" : "Connection: Close\r\n";
+    httpResponse += "Content-Type: text/html\r\n";
+    httpResponse += "\r\n";
     httpResponse += body;
 
     return httpResponse;
@@ -155,25 +147,21 @@ void HttpServer::handleRequest(HttpRequest request) {
     PageReader reader;
     std::string httpResponse = "";
     auto connectionHeaderIt = request.headers.find("Connection");
+    bool keepConnectionAlive = (connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive");
 
-    if(connectionHeaderIt != request.headers.end() && connectionHeaderIt->second == "keep-alive") {
-        std::string htmlPageStr = reader.readPage(request.reqUrl);
+    std::string htmlPageStr = reader.readPage(request.reqUrl);
 
-        if(htmlPageStr == "500"){
-            std::string serverErr = "500 Internal Server Error";
+    if(htmlPageStr == "500"){
+        std::string serverErr = "500 Internal Server Error";
 
-            httpResponse = formatResponse(true, 500, serverErr);
-        }
-        else if(htmlPageStr == "404"){
-            htmlPageStr = reader.read404page();
-            httpResponse = formatResponse(true, 404, htmlPageStr);
-        }
-        else{
-            httpResponse = formatResponse(true, 200, htmlPageStr);
-        }
+        httpResponse = formatResponse(keepConnectionAlive, 500, serverErr);
+    }
+    else if(htmlPageStr == "404"){
+        htmlPageStr = reader.read404page();
+        httpResponse = formatResponse(keepConnectionAlive, 404, htmlPageStr);
     }
     else{
-        httpResponse = formatResponse(false, 200, "");
+        httpResponse = formatResponse(keepConnectionAlive, 200, htmlPageStr);
     }
 
     sendResponse(request.clientSocket, httpResponse);
