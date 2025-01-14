@@ -25,7 +25,7 @@ Transfer/sec:     311.00B
 # setup project
 ## clone repository
 ```
-git clone <url>
+git clone https://github.com/IamTV50/http_server
 cd http_server
 ```
 
@@ -37,4 +37,4 @@ cd http_server
 rename `index_template.html` to `index.html` and `404_template.html` to `404.html` (both are located in **www** folder).
 
 # note
-When pushing changes to git, remember that files inside **www** folder will be **IGNORED** with exception of index_template.html and 404_template.html.
+When pushing changes to git, remember that files inside **www** folder will be **IGNORED** with exception of *index_template.html* and *404_template.html*.
